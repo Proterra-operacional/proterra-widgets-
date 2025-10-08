@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Estado Sincronización Licitaciones</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            padding: 20px;
+            background-color: transparent;
+            color: #37352F;
+        }
+
+        .wrapper {
+            max-width: 900px;
+            margin: 0 auto;
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .counter {
+            background: linear-gradient(135deg, #f6f8fa 0%, #e8e8e8 100%);
+            padding: 30px 20px;
+            border-radius: 12px;
+            flex: 1;
+            min-width: 250px;
+            max-width: 280px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .counter:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 12px rgba(0,0,0,0.15);
+        }
+
+        .counter.processing {
+            background: linear-gradient(135deg, #FFF4E0 0%, #FFE4A0 100%);
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        .counter.success {
+            background: linear-gradient(135deg, #E8F5E9 0%, #C8E6C9 100%);
+        }
+
+        .counter.warning {
+            background: linear-gradient(135deg, #FFF3E0 0%, #FFE0B2 100%);
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.85; }
+        }
+
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        .icon-wrapper {
+            width: 60px;
+            height: 60px;
+            margin: 0 auto 15px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.5);
+        }
+
+        .counter i {
+            font-size: 28px;
+        }
+
+        .counter.processing i {
+            animation: spin 2s linear infinite;
+        }
+
+        .count-title {
+            font-size: 48px;
+            font-weight: 700;
+            margin: 15px 0 5px;
+            text-align: center;
+            color: #37352F;
+        }
+
+        .count-text {
+            font-size: 14px;
+            font-weight: 500;
+            text-align: center;
+            color: #787774;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .status-badge {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .status-badge.active {
+            background: #FFC107;
+            color: #fff;
+        }
+
+        .status-badge.completed {
+            background: #4CAF50;
+            color: #fff;
+        }
+
+        .status-badge.idle {
+            background: #9E9E9E;
+            color: #fff;
+        }
+
+        /* Colores específicos para cada contador */
+        .counter.iniciado i {
+            color: #4ad1e5; /* Cyan/Turquesa */
+        }
+
+        .counter.procesados i {
+            color: #4ad1e5; /* Cyan/Turquesa */
+        }
+
+        .counter.duplicados i {
+            color: #4ad1e5; /* Cyan/Turquesa */
+        }
+    </style>
+</head>
+<body>
+    <div class="wrapper">
+        <!-- Bloque 1: Proceso Iniciado -->
+        <div class="counter iniciado" id="counter-iniciado">
+            <span class="status-badge idle" id="badge-iniciado">Inactivo</span>
+            <div class="icon-wrapper">
+                <i class="fas fa-play-circle"></i>
+            </div>
+            <h2 class="count-title" id="count-iniciado">0</h2>
+            <p class="count-text">Proceso Iniciado</p>
+        </div>
+
+        <!-- Bloque 2: Registros Procesados -->
+        <div class="counter procesados" id="counter-procesados">
+            <span class="status-badge idle" id="badge-procesados">Esperando</span>
+            <div class="icon-wrapper">
+                <i class="fas fa-check-circle"></i>
+            </div>
+            <h2 class="count-title" id="count-procesados">0</h2>
+            <p class="count-text">Registros Procesados</p>
+        </div>
+
+        <!-- Bloque 3: Registros Duplicados -->
+        <div class="counter duplicados" id="counter-duplicados">
+            <span class="status-badge idle" id="badge-duplicados">-</span>
+            <div class="icon-wrapper">
+                <i class="fas fa-exclamation-circle"></i>
+            </div>
+            <h2 class="count-title" id="count-duplicados">0</h2>
+            <p class="count-text">Registros Omitidos</p>
+        </div>
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script>
+        // URL del endpoint que proporciona el estado (actualizar con tu URL real)
+        const STATUS_URL = 'https://tu-servidor.com/status-licitaciones.json';
+        
+        // Intervalo de actualización (cada 2 segundos)
+        const UPDATE_INTERVAL = 2000;
+        
+        // Estado anterior para detectar cambios
+        let previousState = null;
+
+        // Función para animar el contador
+        function animateCounter(element, targetValue, duration = 1000) {
+            const startValue = parseInt(element.textContent) || 0;
+            const increment = (targetValue - startValue) / (duration / 50);
+            let currentValue = startValue;
+            
+            const timer = setInterval(() => {
+                currentValue += increment;
+                if ((increment > 0 && currentValue >= targetValue) || 
+                    (increment < 0 && currentValue <= targetValue)) {
+                    element.textContent = targetValue;
+                    clearInterval(timer);
+                } else {
+                    element.textContent = Math.floor(currentValue);
+                }
+            }, 50);
+        }
+
+        // Función para actualizar el estado del widget
+        function updateWidget(data) {
+            const { estado, iniciado, procesados, duplicados } = data;
+
+            // Actualizar contadores
+            animateCounter(document.getElementById('count-iniciado'), iniciado || 0);
+            animateCounter(document.getElementById('count-procesados'), procesados || 0);
+            animateCounter(document.getElementById('count-duplicados'), duplicados || 0);
+
+            // Actualizar estados visuales
+            const counterIniciado = document.getElementById('counter-iniciado');
+            const counterProcesados = document.getElementById('counter-procesados');
+            const counterDuplicados = document.getElementById('counter-duplicados');
+
+            // Resetear clases
+            counterIniciado.classList.remove('processing', 'success');
+            counterProcesados.classList.remove('processing', 'success');
+            counterDuplicados.classList.remove('processing', 'warning');
+
+            // Aplicar estados según el estado del proceso
+            if (estado === 'procesando') {
+                counterIniciado.classList.add('processing');
+                counterProcesados.classList.add('processing');
+                
+                document.getElementById('badge-iniciado').textContent = 'Activo';
+                document.getElementById('badge-iniciado').className = 'status-badge active';
+                
+                document.getElementById('badge-procesados').textContent = 'Procesando...';
+                document.getElementById('badge-procesados').className = 'status-badge active';
+                
+                document.getElementById('badge-duplicados').textContent = 'Verificando';
+                document.getElementById('badge-duplicados').className = 'status-badge active';
+            } 
+            else if (estado === 'completado') {
+                counterIniciado.classList.add('success');
+                counterProcesados.classList.add('success');
+                if (duplicados > 0) {
+                    counterDuplicados.classList.add('warning');
+                }
+                
+                document.getElementById('badge-iniciado').textContent = 'Completado';
+                document.getElementById('badge-iniciado').className = 'status-badge completed';
+                
+                document.getElementById('badge-procesados').textContent = 'Finalizado';
+                document.getElementById('badge-procesados').className = 'status-badge completed';
+                
+                document.getElementById('badge-duplicados').textContent = duplicados > 0 ? 'Omitidos' : 'Sin omisiones';
+                document.getElementById('badge-duplicados').className = 'status-badge ' + (duplicados > 0 ? 'active' : 'completed');
+
+                // Volver al estado inicial después de 5 segundos
+                setTimeout(() => {
+                    resetWidget();
+                }, 5000);
+            }
+            else {
+                // Estado idle/inactivo
+                document.getElementById('badge-iniciado').className = 'status-badge idle';
+                document.getElementById('badge-procesados').className = 'status-badge idle';
+                document.getElementById('badge-duplicados').className = 'status-badge idle';
+            }
+        }
+
+        // Función para resetear el widget al estado inicial
+        function resetWidget() {
+            animateCounter(document.getElementById('count-iniciado'), 0);
+            animateCounter(document.getElementById('count-procesados'), 0);
+            animateCounter(document.getElementById('count-duplicados'), 0);
+
+            const counters = document.querySelectorAll('.counter');
+            counters.forEach(counter => {
+                counter.classList.remove('processing', 'success', 'warning');
+            });
+
+            document.getElementById('badge-iniciado').textContent = 'Inactivo';
+            document.getElementById('badge-iniciado').className = 'status-badge idle';
+            
+            document.getElementById('badge-procesados').textContent = 'Esperando';
+            document.getElementById('badge-procesados').className = 'status-badge idle';
+            
+            document.getElementById('badge-duplicados').textContent = '-';
+            document.getElementById('badge-duplicados').className = 'status-badge idle';
+        }
+
+        // Función para obtener el estado del servidor
+        async function fetchStatus() {
+            try {
+                const response = await fetch(STATUS_URL + '?t=' + new Date().getTime());
+                if (response.ok) {
+                    const data = await response.json();
+                    updateWidget(data);
+                }
+            } catch (error) {
+                console.log('Esperando datos...', error);
+            }
+        }
+
+        // Iniciar actualización periódica
+        setInterval(fetchStatus, UPDATE_INTERVAL);
+
+        // Primera carga
+        fetchStatus();
+
+        // Exponer función global para actualización manual (útil para testing)
+        window.actualizarEstado = function(iniciado, procesados, duplicados, estado = 'completado') {
+            updateWidget({
+                estado: estado,
+                iniciado: iniciado,
+                procesados: procesados,
+                duplicados: duplicados
+            });
+        };
+    </script>
+</body>
+</html>
+
